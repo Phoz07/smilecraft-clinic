@@ -13,21 +13,25 @@ describe("Ticket 4: Admin Daily Appointment Dashboard & Status Lifecycle Managem
       date: "2026-09-25",
     });
 
-    expect(todayAppointments.length).toBe(3); // apt_demo_01 (10:30), apt_demo_02 (14:00), apt_demo_03 (16:30)
+    expect(todayAppointments.length).toBe(6); // COMPLETED, IN_TREATMENT, CONFIRMED, PENDING, CANCELLED, NO_SHOW
     expect(todayAppointments[0]?.startTime).toBe("10:30");
-    expect(todayAppointments[1]?.startTime).toBe("14:00");
-    expect(todayAppointments[2]?.startTime).toBe("16:30");
+    expect(todayAppointments[1]?.startTime).toBe("11:30");
+    expect(todayAppointments[2]?.startTime).toBe("14:00");
+    expect(todayAppointments[3]?.startTime).toBe("16:30");
+    expect(todayAppointments[4]?.startTime).toBe("18:00");
+    expect(todayAppointments[5]?.startTime).toBe("19:00");
 
     // Filter by dentist
     const mayApts = await caller.appointments.adminList({
       dentistId: "dentist_may",
     });
-    expect(mayApts.length).toBe(4); // 3 today, 1 tomorrow
+    expect(mayApts.length).toBe(7); // 6 today, 1 tomorrow
 
     const chanonApts = await caller.appointments.adminList({
       dentistId: "dentist_chanon",
     });
     expect(chanonApts.length).toBe(1); // 1 on Sunday
+    expect(chanonApts[0]?.hasScheduleBlockCollision).toBe(true);
   });
 
   it("transitions status and frees slot when cancelled (ADR-0001)", async () => {

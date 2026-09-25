@@ -95,6 +95,6 @@ describe("Ticket 2: Public Clinic Landing & Patient Appointment Booking Flow", (
         patientName: "คุณจองซ้ำ",
         patientPhone: "0819998888",
       }),
-    ).rejects.toThrow("ช่วงเวลานี้มีผู้จองแล้วหรือแพทย์ไม่ว่าง");
+    ).rejects.toThrow("ช่วงเวลานี้มีผู้จองแล้ว");
   });
 });

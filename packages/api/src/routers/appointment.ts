@@ -227,7 +227,7 @@ export const appointmentRouter = router({
       if (candidateDentists.length === 0) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "ไม่มีทันตแพทย์ที่สามารถให้บริการหัตถการนี้ตามที่เลือก",
+          message: "ไม่มีทันตแพทย์ที่สามารถให้บริการประเภทนี้ตามที่เลือก",
         });
       }
 
@@ -292,7 +292,7 @@ export const appointmentRouter = router({
       if (!assignedDentistId) {
         throw new TRPCError({
           code: "CONFLICT",
-          message: "ช่วงเวลานี้มีผู้จองแล้วหรือแพทย์ไม่ว่าง กรุณาเลือกช่วงเวลาอื่น",
+          message: "ช่วงเวลานี้มีผู้จองแล้วหรือทันตแพทย์ไม่ว่าง กรุณาเลือกช่วงเวลาอื่น",
         });
       }
 
@@ -397,7 +397,7 @@ export const appointmentRouter = router({
         return a.startTime.localeCompare(b.startTime);
       });
 
-      // Check collision warnings for doctor leaves (ADR-0002)
+      // Check collision warnings for dentist schedule blocks (ADR-0002)
       const dates = Array.from(new Set(appointments.map((a) => a.appointmentDate)));
       const blocks =
         dates.length > 0
@@ -408,7 +408,7 @@ export const appointmentRouter = router({
           : [];
 
       return appointments.map((apt) => {
-        const hasLeaveCollision = blocks.some(
+        const hasScheduleBlockCollision = blocks.some(
           (b) =>
             b.dentistId === apt.dentistId &&
             b.date === apt.appointmentDate &&
@@ -418,7 +418,8 @@ export const appointmentRouter = router({
 
         return {
           ...apt,
-          hasLeaveCollision,
+          hasScheduleBlockCollision,
+          hasLeaveCollision: hasScheduleBlockCollision, // backward compatibility
         };
       });
     }),
@@ -470,7 +471,93 @@ export const appointmentRouter = router({
       const duration = existing.service.durationMinutes;
       const newEndTime = addMinutesToTime(input.newStartTime, duration);
 
-      // Check slot conflict on target dentist (excluding current appointment)
+      // 1. Validate date format & get day of week (0=Sun, 1=Mon, ..., 6=Sat)
+      const [year, month, day] = input.newDate.split("-").map(Number);
+      if (!year || !month || !day) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "รูปแบบวันที่ไม่ถูกต้อง (ต้องเป็น YYYY-MM-DD)",
+        });
+      }
+      const dayOfWeek = new Date(year, month - 1, day).getDay();
+
+      // 2. Validate clinic operating hours (10:00 – 20:00)
+      if (
+        timeToMinutes(input.newStartTime) < timeToMinutes("10:00") ||
+        timeToMinutes(newEndTime) > timeToMinutes("20:00")
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "เวลานัดหมายต้องอยู่ระหว่างเวลาทำการคลินิก (10:00 – 20:00 น.)",
+        });
+      }
+
+      // 3. Verify target dentist exists and is active
+      const targetDentist = await ctx.db.query.dentist.findFirst({
+        where: { id: targetDentistId },
+        with: {
+          dutySchedules: true,
+          services: true,
+        },
+      });
+
+      if (!targetDentist || !targetDentist.isActive) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "ไม่พบข้อมูลทันตแพทย์ที่เลือก หรือทันตแพทย์ไม่ได้เปิดให้บริการ",
+        });
+      }
+
+      // 4. Verify dentist can perform this service
+      const canPerform = targetDentist.services.some(
+        (ds) => ds.serviceId === existing.serviceId,
+      );
+      if (!canPerform) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "ทันตแพทย์ท่านนี้ไม่ได้รับให้บริการประเภทนี้",
+        });
+      }
+
+      // 5. Verify dentist is on duty on this day and time window
+      const hasDuty = targetDentist.dutySchedules.some(
+        (ds) =>
+          ds.isActive &&
+          ds.dayOfWeek === dayOfWeek &&
+          timeToMinutes(input.newStartTime) >= timeToMinutes(ds.startTime) &&
+          timeToMinutes(newEndTime) <= timeToMinutes(ds.endTime),
+      );
+
+      if (!hasDuty) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "ทันตแพทย์ไม่ได้เข้าเวรในวันหรือช่วงเวลาดังกล่าว",
+        });
+      }
+
+      // 6. Check Schedule Block overlap (ADR-0002)
+      const blocks = await ctx.db
+        .select()
+        .from(scheduleBlock)
+        .where(
+          and(
+            eq(scheduleBlock.date, input.newDate),
+            eq(scheduleBlock.dentistId, targetDentistId),
+          ),
+        );
+
+      const hasBlockConflict = blocks.some((b) =>
+        isTimeOverlapping(input.newStartTime, newEndTime, b.startTime, b.endTime),
+      );
+
+      if (hasBlockConflict) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "ช่วงเวลาใหม่ที่เลือกตรงกับช่วงเวลาที่ทันตแพทย์ติดภารกิจลา (Schedule Block)",
+        });
+      }
+
+      // 7. Check slot conflict on target dentist (excluding current appointment)
       const conflicts = await ctx.db
         .select()
         .from(appointment)
@@ -535,7 +622,7 @@ export const appointmentRouter = router({
           date: input.date,
           startTime: input.startTime,
           endTime: input.endTime,
-          reason: input.reason || "แพทย์ติดภารกิจลา",
+          reason: input.reason || "ทันตแพทย์ติดภารกิจลา (Schedule Block)",
         })
         .execute();
 

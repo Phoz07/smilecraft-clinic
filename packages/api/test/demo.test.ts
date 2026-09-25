@@ -12,7 +12,7 @@ describe("Ticket 1: Baseline Domain Foundation & Demo Seed Environment", () => {
     expect(resetResult.success).toBe(true);
     expect(resetResult.dentistsCount).toBe(2);
     expect(resetResult.servicesCount).toBe(4);
-    expect(resetResult.appointmentsCount).toBe(5);
+    expect(resetResult.appointmentsCount).toBe(8);
 
     // Verify dentists list
     const dentists = await caller.dentists.list();

@@ -107,7 +107,20 @@ export async function resetDemoData(db: Database) {
   const tomorrow = "2026-09-26";
   const sunday = "2026-09-27";
 
-  // Seed Baseline Sample Appointments
+  // Seed Baseline Schedule Block (ADR-0002 Soft Block Demonstration)
+  const scheduleBlocksData = [
+    {
+      id: "block_demo_chanon_sunday",
+      dentistId: "dentist_chanon",
+      date: sunday,
+      startTime: "12:00",
+      endTime: "15:00",
+      reason: "ทันตแพทย์ติดภารกิจประชุมวิชาการจัดฟัน (Schedule Block)",
+    },
+  ];
+  await db.insert(scheduleBlock).values(scheduleBlocksData).execute();
+
+  // Seed Baseline Sample Appointments (All 6 Lifecycle Statuses)
   const appointmentsData = [
     {
       id: "apt_demo_01",
@@ -122,6 +135,20 @@ export async function resetDemoData(db: Database) {
       endTime: "11:00",
       status: "COMPLETED" as const,
       internalNotes: "คนไข้มาตรงเวลา ขูดหินปูนเรียบร้อย นัดตรวจฟันซ้ำอีก 6 เดือน",
+    },
+    {
+      id: "apt_demo_06",
+      bookingCode: "#SC-20260925-W1V8",
+      patientName: "คุณวิภาวัลย์ งามวิไล",
+      patientPhone: "0859991122",
+      medicalNotes: "ฟันมีความไวต่อความเย็นเล็กน้อย",
+      dentistId: "dentist_may",
+      serviceId: "service_whitening",
+      appointmentDate: today,
+      startTime: "11:30",
+      endTime: "12:30",
+      status: "IN_TREATMENT" as const,
+      internalNotes: "คนไข้อยู่ในห้องตรวจ ยูนิต 1 กำลังทำหัตถการฟอกสีฟัน",
     },
     {
       id: "apt_demo_02",
@@ -152,6 +179,34 @@ export async function resetDemoData(db: Database) {
       internalNotes: "คนไข้จองผ่านหน้าเว็บไซต์ รอเคาน์เตอร์โทรยืนยัน",
     },
     {
+      id: "apt_demo_07",
+      bookingCode: "#SC-20260925-X7Z4",
+      patientName: "คุณพิชิต ชัยชนะ",
+      patientPhone: "0871113344",
+      medicalNotes: "ไม่มีโรคประจำตัว",
+      dentistId: "dentist_may",
+      serviceId: "service_scaling",
+      appointmentDate: today,
+      startTime: "18:00",
+      endTime: "18:30",
+      status: "CANCELLED" as const,
+      internalNotes: "คนไข้โทรแจ้งยกเลิกนัดหมายเนื่องจากติดภารกิจด่วน ปลดล็อกสล็อตแล้ว",
+    },
+    {
+      id: "apt_demo_08",
+      bookingCode: "#SC-20260925-N3Q6",
+      patientName: "คุณธีรเดช เกียรติสกุล",
+      patientPhone: "0894445566",
+      medicalNotes: "ไม่มีโรคประจำตัว",
+      dentistId: "dentist_may",
+      serviceId: "service_scaling",
+      appointmentDate: today,
+      startTime: "19:00",
+      endTime: "19:30",
+      status: "NO_SHOW" as const,
+      internalNotes: "เกินเวลานัด 20 นาที โทรติดต่อ 3 ครั้งไม่รับสาย บันทึกสถานะ No-Show",
+    },
+    {
       id: "apt_demo_04",
       bookingCode: "#SC-20260926-C4D5",
       patientName: "คุณวิภาดา สดใส",
@@ -177,7 +232,7 @@ export async function resetDemoData(db: Database) {
       startTime: "13:00",
       endTime: "14:00",
       status: "CONFIRMED" as const,
-      internalNotes: "ส่งประวัติภาพถ่ายเบื้องต้นแล้ว",
+      internalNotes: "ส่งประวัติภาพถ่ายเบื้องต้นแล้ว (ซ้อนทับกับ Schedule Block)",
     },
   ];
   await db.insert(appointment).values(appointmentsData).execute();

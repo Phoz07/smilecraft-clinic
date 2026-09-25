@@ -22,36 +22,33 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { formatThaiDate } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 
-function formatThaiDate(dateStr: string) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  if (!y || !m || !d) return dateStr;
-  const date = new Date(y, m - 1, d);
-  const days = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสฯ", "ศุกร์", "เสาร์"];
-  const months = [
-    "ม.ค.",
-    "ก.พ.",
-    "มี.ค.",
-    "เม.ย.",
-    "พ.ค.",
-    "มิ.ย.",
-    "ก.ค.",
-    "ส.ค.",
-    "ก.ย.",
-    "ต.ค.",
-    "พ.ย.",
-    "ธ.ค.",
-  ];
-  return `วัน${days[date.getDay()]}ที่ ${d} ${months[m - 1]} ${y + 543}`;
+export interface BookingFlowProps {
+  initialServiceId?: string | null;
+  initialDentistId?: string | null;
+  initialStep?: 1 | 2 | 3 | 4 | 5;
+  dentistLocked?: boolean;
+  onResetDentist?: () => void;
 }
 
-export function BookingFlow() {
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>("service_scaling");
-  const [selectedDentistId, setSelectedDentistId] = useState<string>("any");
+export function BookingFlow({
+  initialServiceId,
+  initialDentistId,
+  initialStep,
+  dentistLocked = false,
+  onResetDentist,
+}: BookingFlowProps = {}) {
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(initialStep || 1);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(
+    initialServiceId || "service_scaling",
+  );
+  const [selectedDentistId, setSelectedDentistId] = useState<string>(
+    initialDentistId || "any",
+  );
 
   // Initial date: 2026-09-25
   const todayStr = "2026-09-25";
@@ -66,6 +63,25 @@ export function BookingFlow() {
   // Queries
   const servicesQuery = useQuery(trpc.services.list.queryOptions());
   const dentistsQuery = useQuery(trpc.dentists.list.queryOptions());
+
+  // Synchronize incoming props
+  useEffect(() => {
+    if (initialServiceId) {
+      setSelectedServiceId(initialServiceId);
+    }
+  }, [initialServiceId]);
+
+  useEffect(() => {
+    if (initialDentistId) {
+      setSelectedDentistId(initialDentistId);
+    }
+  }, [initialDentistId]);
+
+  useEffect(() => {
+    if (initialStep) {
+      setStep(initialStep);
+    }
+  }, [initialStep]);
 
   const slotsQuery = useQuery(
     trpc.appointments.getAvailableSlots.queryOptions(
@@ -135,6 +151,45 @@ export function BookingFlow() {
     if (selectedDentistId === "any") return null;
     return dentistsQuery.data?.find((d) => d.id === selectedDentistId);
   }, [dentistsQuery.data, selectedDentistId]);
+
+  // Check whether a date is off-duty for the selected dentist
+  const isDateDisabled = useMemo(() => {
+    return (isoDate: string) => {
+      if (selectedDentistId === "any") return false;
+      const dentist = dentistsQuery.data?.find((d) => d.id === selectedDentistId);
+      if (!dentist) return false;
+      const [y, m, d] = isoDate.split("-").map(Number);
+      if (!y || !m || !d) return false;
+      const dayOfWeek = new Date(y, m - 1, d).getDay();
+      const hasDuty = dentist.dutySchedules?.some(
+        (ds) => ds.isActive && ds.dayOfWeek === dayOfWeek,
+      );
+      return !hasDuty;
+    };
+  }, [selectedDentistId, dentistsQuery.data]);
+
+  // Auto-shift date if selected date is off-duty for chosen dentist
+  useEffect(() => {
+    if (selectedDentistId === "any" || !dentistsQuery.data) return;
+    if (isDateDisabled(selectedDate)) {
+      const firstAvailable = dateOptions.find((opt) => !isDateDisabled(opt.iso));
+      if (firstAvailable) {
+        setSelectedDate(firstAvailable.iso);
+        setSelectedTime(null);
+      }
+    }
+  }, [selectedDentistId, isDateDisabled, selectedDate, dateOptions, dentistsQuery.data]);
+
+  // Filter services when dentist is locked from outside
+  const servicesToShow = useMemo(() => {
+    if (!servicesQuery.data) return [];
+    if (!dentistLocked || selectedDentistId === "any") return servicesQuery.data;
+    const dentist = dentistsQuery.data?.find((d) => d.id === selectedDentistId);
+    if (!dentist) return servicesQuery.data;
+    return servicesQuery.data.filter((s) =>
+      dentist.services?.some((ds) => ds.serviceId === s.id),
+    );
+  }, [servicesQuery.data, dentistsQuery.data, selectedDentistId, dentistLocked]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -208,9 +263,30 @@ export function BookingFlow() {
               เลือกบริการทันตกรรมที่ต้องการ
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              คลินิกใช้เวลาตรวจและรักษาตามมาตรฐานหัตถการ พร้อมแจ้งราคาเริ่มต้นชัดเจน
+              คลินิกใช้เวลาตรวจและรักษาตามมาตรฐานบริการ พร้อมแจ้งราคาเริ่มต้นชัดเจน
             </p>
           </div>
+
+          {/* Pre-selected Dentist Banner */}
+          {dentistLocked && selectedDentist && (
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-xs">
+              <div className="flex items-center gap-2 text-teal-900 dark:text-teal-200">
+                <Sparkles className="w-4 h-4 text-teal-600 shrink-0" />
+                <span>
+                  นัดหมายเจาะจงกับ: <strong>{selectedDentist.name}</strong> ({selectedDentist.title})
+                </span>
+              </div>
+              {onResetDentist && (
+                <button
+                  type="button"
+                  onClick={onResetDentist}
+                  className="text-teal-700 dark:text-teal-300 hover:underline font-semibold cursor-pointer"
+                >
+                  เลือกทันตแพทย์ท่านอื่น
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="grid sm:grid-cols-2 gap-4">
             {servicesQuery.isLoading && (
@@ -219,7 +295,7 @@ export function BookingFlow() {
               </div>
             )}
 
-            {servicesQuery.data?.map((srv) => {
+            {servicesToShow.map((srv) => {
               const isSelected = selectedServiceId === srv.id;
               return (
                 <div
@@ -261,11 +337,21 @@ export function BookingFlow() {
 
           <div className="flex justify-end pt-4">
             <button
-              onClick={() => setStep(2)}
+              onClick={() => {
+                if (dentistLocked && selectedDentistId && selectedDentistId !== "any") {
+                  setStep(3); // Bypass Step 2 directly to Step 3
+                } else {
+                  setStep(2);
+                }
+              }}
               disabled={!selectedServiceId}
               className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-medium px-6 py-2.5 rounded-xl shadow-sm transition-all disabled:opacity-50 cursor-pointer"
             >
-              <span>ถัดไป: เลือกทันตแพทย์</span>
+              <span>
+                {dentistLocked && selectedDentistId && selectedDentistId !== "any"
+                  ? "ถัดไป: เลือกวันและเวลา"
+                  : "ถัดไป: เลือกทันตแพทย์"}
+              </span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -411,23 +497,30 @@ export function BookingFlow() {
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
               {dateOptions.map((item) => {
                 const isSelected = selectedDate === item.iso;
+                const disabled = isDateDisabled(item.iso);
                 return (
                   <button
                     key={item.iso}
                     type="button"
+                    disabled={disabled}
                     onClick={() => {
+                      if (disabled) return;
                       setSelectedDate(item.iso);
                       setSelectedTime(null);
                     }}
-                    className={`flex flex-col items-center justify-center p-2.5 min-w-[70px] rounded-xl border-2 transition-all cursor-pointer ${
-                      isSelected
-                        ? "border-teal-600 bg-teal-600 text-white shadow-sm scale-105"
-                        : "border-border hover:border-teal-300 hover:bg-accent/40 text-foreground"
+                    className={`flex flex-col items-center justify-center p-2.5 min-w-[70px] rounded-xl border-2 transition-all ${
+                      disabled
+                        ? "border-muted/60 bg-muted/20 text-muted-foreground/35 cursor-not-allowed opacity-60"
+                        : isSelected
+                          ? "border-teal-600 bg-teal-600 text-white shadow-sm scale-105 cursor-pointer"
+                          : "border-border hover:border-teal-300 hover:bg-accent/40 text-foreground cursor-pointer"
                     }`}
                   >
                     <span className="text-[11px] font-medium opacity-80">{item.dayOfWeek}</span>
                     <span className="text-lg font-bold my-0.5">{item.dayNumber}</span>
-                    <span className="text-[10px] opacity-75">{item.month}</span>
+                    <span className="text-[10px] opacity-75">
+                      {disabled ? "หยุดเวร" : item.month}
+                    </span>
                   </button>
                 );
               })}
@@ -489,7 +582,13 @@ export function BookingFlow() {
 
           <div className="flex items-center justify-between pt-4 border-t">
             <button
-              onClick={() => setStep(2)}
+              onClick={() => {
+                if (dentistLocked && selectedDentistId && selectedDentistId !== "any") {
+                  setStep(1);
+                } else {
+                  setStep(2);
+                }
+              }}
               className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground px-4 py-2 rounded-xl border hover:bg-accent cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />

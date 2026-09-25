@@ -23,29 +23,8 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { formatThaiDate } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
-
-function formatThaiDate(dateStr: string) {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  if (!y || !m || !d) return dateStr;
-  const date = new Date(y, m - 1, d);
-  const days = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสฯ", "ศุกร์", "เสาร์"];
-  const months = [
-    "ม.ค.",
-    "ก.พ.",
-    "มี.ค.",
-    "เม.ย.",
-    "พ.ค.",
-    "มิ.ย.",
-    "ก.ค.",
-    "ส.ค.",
-    "ก.ย.",
-    "ต.ค.",
-    "พ.ย.",
-    "ธ.ค.",
-  ];
-  return `วัน${days[date.getDay()]}ที่ ${d} ${months[m - 1]} ${y + 543}`;
-}
 
 type AppointmentStatus =
   | "ALL"
@@ -68,14 +47,14 @@ export default function AdminPage() {
   const [rescheduleTarget, setRescheduleTarget] = useState<any | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState("2026-09-26");
   const [rescheduleTime, setRescheduleTime] = useState<string | null>(null);
-  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [isScheduleBlockModalOpen, setIsScheduleBlockModalOpen] = useState(false);
 
-  // Leave Form state
-  const [leaveDentistId, setLeaveDentistId] = useState("dentist_may");
-  const [leaveDate, setLeaveDate] = useState("2026-09-25");
-  const [leaveStartTime, setLeaveStartTime] = useState("10:00");
-  const [leaveEndTime, setLeaveEndTime] = useState("20:00");
-  const [leaveReason, setLeaveReason] = useState("ติดภารกิจสัมมนาวิชาการ");
+  // Schedule Block Form state (ADR-0002)
+  const [blockDentistId, setBlockDentistId] = useState("dentist_may");
+  const [blockDate, setBlockDate] = useState("2026-09-25");
+  const [blockStartTime, setBlockStartTime] = useState("10:00");
+  const [blockEndTime, setBlockEndTime] = useState("20:00");
+  const [blockReason, setBlockReason] = useState("ติดภารกิจสัมมนาวิชาการ");
 
   // Queries
   const dentistsQuery = useQuery(trpc.dentists.list.queryOptions());
@@ -134,10 +113,10 @@ export default function AdminPage() {
     trpc.appointments.addScheduleBlock.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries();
-        toast.success("บันทึกวันลาแพทย์เรียบร้อย!", {
+        toast.success("บันทึก Schedule Block เรียบร้อย!", {
           description: "ระบบได้ทำการ Soft Block ปิดรับจองใหม่ และแจ้งเตือนหากมีคิวเดิมซ้อนทับ",
         });
-        setIsLeaveModalOpen(false);
+        setIsScheduleBlockModalOpen(false);
       },
       onError: (err) => {
         toast.error("บันทึกไม่สำเร็จ", { description: err.message });
@@ -169,14 +148,14 @@ export default function AdminPage() {
     });
   };
 
-  const handleAddLeave = (e: React.FormEvent) => {
+  const handleAddScheduleBlock = (e: React.FormEvent) => {
     e.preventDefault();
     addBlockMutation.mutate({
-      dentistId: leaveDentistId,
-      date: leaveDate,
-      startTime: leaveStartTime,
-      endTime: leaveEndTime,
-      reason: leaveReason,
+      dentistId: blockDentistId,
+      date: blockDate,
+      startTime: blockStartTime,
+      endTime: blockEndTime,
+      reason: blockReason,
     });
   };
 
@@ -267,11 +246,11 @@ export default function AdminPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => setIsLeaveModalOpen(true)}
+              onClick={() => setIsScheduleBlockModalOpen(true)}
               className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               <Calendar className="w-3.5 h-3.5" />
-              <span>จัดการตารางเวร / วันลาแพทย์</span>
+              <span>จัดการตารางเวร & Schedule Block</span>
             </button>
 
             <button
@@ -674,15 +653,18 @@ export default function AdminPage() {
                       ) : (
                         matchingApts.map((a) => {
                           const badge = getStatusBadge(a.status);
+                          const isCollision = a.hasScheduleBlockCollision || a.hasLeaveCollision;
                           return (
                             <div
                               key={a.id}
-                              className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-3 flex-1 min-w-[240px] ${
-                                a.status === "PENDING"
-                                  ? "bg-amber-50/80 dark:bg-amber-950/40 border-amber-300"
-                                  : a.status === "CONFIRMED"
-                                    ? "bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300"
-                                    : "bg-muted/60 border-border"
+                              className={`p-2.5 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-1 min-w-[260px] ${
+                                isCollision
+                                  ? "bg-amber-100/90 dark:bg-amber-950/70 border-amber-400 dark:border-amber-600 shadow-xs"
+                                  : a.status === "PENDING"
+                                    ? "bg-amber-50/80 dark:bg-amber-950/40 border-amber-300"
+                                    : a.status === "CONFIRMED"
+                                      ? "bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300"
+                                      : "bg-muted/60 border-border"
                               }`}
                             >
                               <div>
@@ -693,14 +675,33 @@ export default function AdminPage() {
                                   </span>
                                 </div>
                                 <div className="text-[11px] text-muted-foreground">
-                                  {a.service?.name} • หมอ{a.dentist?.name.split(" ")[1]}
+                                  {a.service?.name} • {a.dentist?.name}
                                 </div>
+                                {isCollision && (
+                                  <div className="mt-1 flex items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    <span>⚠️ ทันตแพทย์ติดภารกิจลา (Schedule Block)</span>
+                                  </div>
+                                )}
                               </div>
-                              <span
-                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badge.color}`}
-                              >
-                                {badge.label}
-                              </span>
+                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                {isCollision && (
+                                  <button
+                                    onClick={() => {
+                                      setRescheduleTarget(a);
+                                      setRescheduleDate(a.appointmentDate);
+                                    }}
+                                    className="px-2 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium text-[10px] cursor-pointer"
+                                  >
+                                    เลื่อนนัด
+                                  </button>
+                                )}
+                                <span
+                                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badge.color}`}
+                                >
+                                  {badge.label}
+                                </span>
+                              </div>
                             </div>
                           );
                         })
@@ -829,17 +830,17 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* MODAL 2: DUTY SCHEDULE & DOCTOR LEAVE MANAGEMENT */}
-        {isLeaveModalOpen && (
+        {/* MODAL 2: DUTY SCHEDULE & SCHEDULE BLOCK MANAGEMENT */}
+        {isScheduleBlockModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
             <div className="bg-card w-full max-w-xl rounded-3xl border shadow-xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
               <div className="flex items-center justify-between border-b pb-3">
                 <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-amber-500" />
-                  <span>จัดการตารางเวร & บันทึกวันลาแพทย์</span>
+                  <span>จัดการตารางเวร & บันทึก Schedule Block</span>
                 </h3>
                 <button
-                  onClick={() => setIsLeaveModalOpen(false)}
+                  onClick={() => setIsScheduleBlockModalOpen(false)}
                   className="p-1 rounded-lg hover:bg-muted text-muted-foreground cursor-pointer"
                 >
                   <X className="w-5 h-5" />
@@ -871,11 +872,11 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Add Leave / Schedule Block Form */}
-              <form onSubmit={handleAddLeave} className="space-y-4 pt-2 border-t">
+              {/* Add Schedule Block Form */}
+              <form onSubmit={handleAddScheduleBlock} className="space-y-4 pt-2 border-t">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-semibold text-foreground">
-                    บันทึกวันลา / ปิดช่วงเวลาตรวจแพทย์ (Schedule Block)
+                    บันทึกช่วงเวลาบล็อกเวร (Schedule Block)
                   </h4>
                   <span className="text-[10px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 px-2 py-0.5 rounded font-mono">
                     ADR-0002 Soft Block
@@ -888,8 +889,8 @@ export default function AdminPage() {
                       เลือกทันตแพทย์
                     </label>
                     <select
-                      value={leaveDentistId}
-                      onChange={(e) => setLeaveDentistId(e.target.value)}
+                      value={blockDentistId}
+                      onChange={(e) => setBlockDentistId(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border bg-background text-xs"
                     >
                       {dentistsQuery.data?.map((d) => (
@@ -901,11 +902,11 @@ export default function AdminPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs text-muted-foreground mb-1">วันที่ลา</label>
+                    <label className="block text-xs text-muted-foreground mb-1">วันที่</label>
                     <input
                       type="date"
-                      value={leaveDate}
-                      onChange={(e) => setLeaveDate(e.target.value)}
+                      value={blockDate}
+                      onChange={(e) => setBlockDate(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border bg-background text-xs"
                     />
                   </div>
@@ -914,8 +915,8 @@ export default function AdminPage() {
                     <label className="block text-xs text-muted-foreground mb-1">ตั้งแต่เวลา</label>
                     <input
                       type="time"
-                      value={leaveStartTime}
-                      onChange={(e) => setLeaveStartTime(e.target.value)}
+                      value={blockStartTime}
+                      onChange={(e) => setBlockStartTime(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border bg-background text-xs font-mono"
                     />
                   </div>
@@ -924,35 +925,35 @@ export default function AdminPage() {
                     <label className="block text-xs text-muted-foreground mb-1">ถึงเวลา</label>
                     <input
                       type="time"
-                      value={leaveEndTime}
-                      onChange={(e) => setLeaveEndTime(e.target.value)}
+                      value={blockEndTime}
+                      onChange={(e) => setBlockEndTime(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border bg-background text-xs font-mono"
                     />
                   </div>
 
                   <div className="sm:col-span-2">
                     <label className="block text-xs text-muted-foreground mb-1">
-                      เหตุผลการลา / หมายเหตุ
+                      เหตุผล / หมายเหตุ
                     </label>
                     <input
                       type="text"
-                      placeholder="เช่น ลาพักร้อน, ติดสัมมนาวิชาการ, ธุระด่วน"
-                      value={leaveReason}
-                      onChange={(e) => setLeaveReason(e.target.value)}
+                      placeholder="เช่น ติดสัมมนาวิชาการ, ธุระเร่งด่วน, พักเบรกยูนิตทำฟัน"
+                      value={blockReason}
+                      onChange={(e) => setBlockReason(e.target.value)}
                       className="w-full px-3 py-2 rounded-xl border bg-background text-xs"
                     />
                   </div>
                 </div>
 
                 <p className="text-[11px] text-muted-foreground bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded-xl border border-amber-200 dark:border-amber-900/60">
-                  ℹ️ ระบบจะปิดรับจองหน้าบ้านสำหรับแพทย์ท่านนี้ในวันและเวลาดังกล่าวทันที
+                  ℹ️ ระบบจะปิดรับจองหน้าบ้านสำหรับทันตแพทย์ท่านนี้ในวันและเวลาดังกล่าวทันที
                   และหากมีนัดหมายเดิมของคนไข้อยู่ จะขึ้นป้ายเตือน ⚠️ ให้เคาน์เตอร์โทรแจ้งเลื่อนนัด
                 </p>
 
                 <div className="flex items-center justify-end gap-2.5 pt-2">
                   <button
                     type="button"
-                    onClick={() => setIsLeaveModalOpen(false)}
+                    onClick={() => setIsScheduleBlockModalOpen(false)}
                     className="px-4 py-2 text-xs font-medium border rounded-xl hover:bg-muted cursor-pointer"
                   >
                     ปิด
@@ -962,7 +963,7 @@ export default function AdminPage() {
                     disabled={addBlockMutation.isPending}
                     className="px-5 py-2 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
                   >
-                    {addBlockMutation.isPending ? "กำลังบันทึก..." : "บันทึกวันลาแพทย์"}
+                    {addBlockMutation.isPending ? "กำลังบันทึก..." : "บันทึก Schedule Block"}
                   </button>
                 </div>
               </form>

@@ -67,16 +67,18 @@ describe("Ticket 5: Admin Reschedule Dialog & Duty Schedule Leave Management wit
     });
     expect(blockRes.success).toBe(true);
 
-    // 1. Check adminList: apt_demo_02 MUST be flagged with hasLeaveCollision: true!
+    // 1. Check adminList: apt_demo_02 MUST be flagged with hasScheduleBlockCollision (and hasLeaveCollision): true!
     const adminAppointments = await caller.appointments.adminList({
       date: "2026-09-25",
     });
 
     const apt02 = adminAppointments.find((a) => a.id === "apt_demo_02");
+    expect(apt02?.hasScheduleBlockCollision).toBe(true);
     expect(apt02?.hasLeaveCollision).toBe(true);
 
     // apt_demo_01 at 10:30 is NOT overlapping with the 13:00-16:00 block
     const apt01 = adminAppointments.find((a) => a.id === "apt_demo_01");
+    expect(apt01?.hasScheduleBlockCollision).toBe(false);
     expect(apt01?.hasLeaveCollision).toBe(false);
 
     // 2. Check public getAvailableSlots: 13:00 - 16:00 slots must now be BLOCKED
@@ -95,5 +97,25 @@ describe("Ticket 5: Admin Reschedule Dialog & Duty Schedule Leave Management wit
     // Slot 17:00 (after block) should still be available
     const slot1700 = slots.slots.find((s) => s.time === "17:00");
     expect(slot1700?.isAvailable).toBe(true);
+
+    // 3. Strict Reschedule Validation: Reject reschedule if dentist is off-duty
+    // Dr. May works Mon(1), Wed(3), Fri(5), Sat(6). Tuesday 2026-09-29 is off-duty!
+    await expect(
+      caller.appointments.reschedule({
+        id: "apt_demo_01",
+        newDate: "2026-09-29", // Tuesday
+        newStartTime: "10:30",
+      }),
+    ).rejects.toThrow("ทันตแพทย์ไม่ได้เข้าเวรในวันหรือช่วงเวลาดังกล่าว");
+
+    // 4. Strict Reschedule Validation: Reject reschedule if overlapping with Schedule Block
+    // Dr. May has a schedule block from 13:00 to 16:00 on 2026-09-25
+    await expect(
+      caller.appointments.reschedule({
+        id: "apt_demo_01",
+        newDate: "2026-09-25",
+        newStartTime: "14:00",
+      }),
+    ).rejects.toThrow("ช่วงเวลาใหม่ที่เลือกตรงกับช่วงเวลาที่ทันตแพทย์ติดภารกิจลา");
   });
 });
