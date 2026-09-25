@@ -1,0 +1,22 @@
+{
+  "name": "@smilecraft-clinic/api",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@smilecraft-clinic/auth": "workspace:*",
+    "@smilecraft-clinic/db": "workspace:*",
+    "@trpc/client": "catalog:",
+    "@trpc/server": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@smilecraft-clinic/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

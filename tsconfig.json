@@ -1,0 +1,3 @@
+{
+  "extends": "@smilecraft-clinic/config/tsconfig.base.json"
+}
