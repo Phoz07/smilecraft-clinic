@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import "../index.css";
+import { DemoToolbar } from "@/components/demo-toolbar";
 import Header from "@/components/header";
 import Providers from "@/components/providers";
 import PwaRegistration from "@/components/pwa-registration";
@@ -17,8 +18,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "smilecraft-clinic",
-  description: "smilecraft-clinic",
+  title: "Smile Craft Dental Clinic | จองคิวนัดหมายออนไลน์",
+  description: "ระบบจองคิวนัดหมายออนไลน์ คลินิกทันตกรรมสไมล์คราฟต์ เปิดบริการ 10:00 - 20:00 น. ทุกวัน",
 };
 
 export default function RootLayout({
@@ -27,14 +28,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <html lang="th" suppressHydrationWarning>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}>
         <PwaRegistration />
 
         <Providers>
-          <div className="grid grid-rows-[auto_1fr] h-svh">
+          <div className="flex flex-col min-h-screen">
+            <DemoToolbar />
             <Header />
-            {children}
+            <main className="flex-1">{children}</main>
           </div>
         </Providers>
       </body>

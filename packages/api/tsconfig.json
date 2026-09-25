@@ -2,5 +2,7 @@
   "extends": "@smilecraft-clinic/config/tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true
-  }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "test/**/*"]
 }

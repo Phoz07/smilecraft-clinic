@@ -8,3 +8,7 @@ export function createDb(env: DatabaseConfig) {
 }
 
 export type Database = ReturnType<typeof createDb>;
+
+export * from "./schema";
+export { resetDemoData } from "./seed";
+export { createTestDb } from "./test-utils";

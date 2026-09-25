@@ -1,12 +1,13 @@
 import { trpcServer } from "@hono/trpc-server";
 import { appRouter } from "@smilecraft-clinic/api/routers/index";
+import { resetDemoData } from "@smilecraft-clinic/db";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 
 import { createContext } from "./context";
 import { ENV } from "./env.server";
-import { createAuth } from "./services";
+import { createAuth, getDb } from "./services";
 
 const app = new Hono();
 
@@ -22,6 +23,12 @@ app.use(
 );
 
 app.on(["POST", "GET"], "/api/auth/*", async (c) => (await createAuth()).handler(c.req.raw));
+
+app.post("/api/demo/reset", async (c) => {
+  const db = await getDb();
+  const result = await resetDemoData(db);
+  return c.json(result);
+});
 
 app.use(
   "/trpc/*",

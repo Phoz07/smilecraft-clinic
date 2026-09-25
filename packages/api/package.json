@@ -6,13 +6,15 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@smilecraft-clinic/auth": "workspace:*",
     "@smilecraft-clinic/db": "workspace:*",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
+    "drizzle-orm": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
