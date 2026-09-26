@@ -191,6 +191,7 @@ export default function AdminPage() {
 			inTreatment: list.filter((a) => a.status === "IN_TREATMENT").length,
 			completed: list.filter((a) => a.status === "COMPLETED").length,
 			cancelled: list.filter((a) => a.status === "CANCELLED").length,
+			noShow: list.filter((a) => a.status === "NO_SHOW").length,
 		};
 	}, [appointmentsQuery.data]);
 
@@ -308,7 +309,7 @@ export default function AdminPage() {
 				</div>
 
 				{/* Metric Cards Ribbon */}
-				<div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+				<div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
 					<div className="space-y-1 rounded-xl border bg-card p-3.5 shadow-2xs">
 						<span className="text-[11px] text-muted-foreground">ทั้งหมดวันนี้</span>
 						<div className="font-bold text-foreground text-xl">
@@ -353,6 +354,14 @@ export default function AdminPage() {
 						</span>
 						<div className="font-bold text-rose-900 text-xl dark:text-rose-200">
 							{metrics.cancelled}
+						</div>
+					</div>
+					<div className="space-y-1 rounded-xl border border-slate-300 bg-slate-100/80 p-3.5 dark:border-slate-800 dark:bg-slate-900/50">
+						<span className="font-medium text-[11px] text-slate-700 dark:text-slate-300">
+							⚫ ไม่มาตามนัด
+						</span>
+						<div className="font-bold text-slate-800 text-xl dark:text-slate-200">
+							{metrics.noShow}
 						</div>
 					</div>
 				</div>
@@ -437,6 +446,7 @@ export default function AdminPage() {
 									["IN_TREATMENT", "🔵 กำลังรักษา"],
 									["COMPLETED", "🟣 เสร็จสิ้น"],
 									["CANCELLED", "🔴 ยกเลิก"],
+									["NO_SHOW", "⚫ ไม่มาตามนัด"],
 								] as const
 							).map(([st, label]) => (
 								<button
@@ -495,12 +505,12 @@ export default function AdminPage() {
 									className="space-y-3 rounded-2xl border bg-card p-4 shadow-2xs transition-shadow hover:shadow-xs sm:p-5"
 								>
 									{/* Leave Collision Warning Banner (ADR-0002) */}
-									{apt.hasLeaveCollision && (
+									{(apt.hasScheduleBlockCollision || apt.hasLeaveCollision) && (
 										<div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-100/90 p-3 text-amber-950 text-xs dark:border-amber-700 dark:bg-amber-950/80 dark:text-amber-200">
 											<div className="flex items-center gap-2">
 												<AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
 												<span className="font-bold">
-													⚠️ แพทย์ติดภารกิจลา / กรุณาติดต่อคนไข้เพื่อเลื่อนนัดหมาย
+													⚠️ แพทย์ติดภารกิจลา / กรุณาติดต่อเลื่อนนัด
 												</span>
 											</div>
 											<button

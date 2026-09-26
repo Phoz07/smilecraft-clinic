@@ -154,27 +154,39 @@ export function BookingFlow({
 		return dentistsQuery.data?.find((d) => d.id === selectedDentistId);
 	}, [dentistsQuery.data, selectedDentistId]);
 
-	// Check whether a date is off-duty for the selected dentist
+	// Check whether a date is off-duty for the selected dentist or all eligible dentists
 	const isDateDisabled = useMemo(() => {
 		return (isoDate: string) => {
-			if (selectedDentistId === "any") return false;
+			const [y, m, d] = isoDate.split("-").map(Number);
+			if (!y || !m || !d) return false;
+			const dayOfWeek = new Date(y, m - 1, d).getDay();
+
+			if (selectedDentistId === "any") {
+				// If "Any Dentist" is chosen, disable date if NO eligible dentist is on duty
+				if (eligibleDentists.length === 0) return true;
+				const anyOnDuty = eligibleDentists.some((dentist) =>
+					dentist.dutySchedules?.some(
+						(ds) => ds.isActive && ds.dayOfWeek === dayOfWeek,
+					),
+				);
+				return !anyOnDuty;
+			}
+
+			// Specific dentist selected
 			const dentist = dentistsQuery.data?.find(
 				(d) => d.id === selectedDentistId,
 			);
 			if (!dentist) return false;
-			const [y, m, d] = isoDate.split("-").map(Number);
-			if (!y || !m || !d) return false;
-			const dayOfWeek = new Date(y, m - 1, d).getDay();
 			const hasDuty = dentist.dutySchedules?.some(
 				(ds) => ds.isActive && ds.dayOfWeek === dayOfWeek,
 			);
 			return !hasDuty;
 		};
-	}, [selectedDentistId, dentistsQuery.data]);
+	}, [selectedDentistId, eligibleDentists, dentistsQuery.data]);
 
-	// Auto-shift date if selected date is off-duty for chosen dentist
+	// Auto-shift date if selected date is off-duty
 	useEffect(() => {
-		if (selectedDentistId === "any" || !dentistsQuery.data) return;
+		if (!dentistsQuery.data) return;
 		if (isDateDisabled(selectedDate)) {
 			const firstAvailable = dateOptions.find(
 				(opt) => !isDateDisabled(opt.iso),
@@ -184,13 +196,7 @@ export function BookingFlow({
 				setSelectedTime(null);
 			}
 		}
-	}, [
-		selectedDentistId,
-		isDateDisabled,
-		selectedDate,
-		dateOptions,
-		dentistsQuery.data,
-	]);
+	}, [isDateDisabled, selectedDate, dateOptions, dentistsQuery.data]);
 
 	// Filter services when dentist is locked from outside
 	const servicesToShow = useMemo(() => {
@@ -580,7 +586,7 @@ export function BookingFlow({
 											{item.dayNumber}
 										</span>
 										<span className="text-[10px] opacity-75">
-											{disabled ? "หยุดเวร" : item.month}
+											{disabled ? "ไม่มีตรวจ" : item.month}
 										</span>
 									</button>
 								);
